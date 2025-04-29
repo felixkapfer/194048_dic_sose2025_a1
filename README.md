@@ -52,29 +52,48 @@ pip install -r requirements.txt
 
 ```bash
 /
-├── LICENSE
-├── README.md
-├── requirements.txt         # Python deps (e.g. mrjob)
-└── src
-    ├── data
-    │   ├── reviews_devset.json   # Sample review data
-    │   └── stopwords.txt         # Stopwords list
-    ├── main.sh                   # Orchestration script
-    ├── wordCountWrapper.py       # Wrapper for WordCountJob
-    ├── wordCountJob.py           # MRJob: word↔category count
-    ├── chiSquaredJob.py          # MRJob: Chi-Squared analysis
-    └── utils
-        ├── logger.py             # Simple logging wrapper
-        ├── utils.py              # get_arg_value, bash helpers
-        └── utils.sh              # bash helper functions
+├── LICENSE                       # Project license
+├── README.md                     # Project documentation (this file)
+├── requirements.txt              # Python dependencies (mrjob, etc.)
+└── src                         # Source code and data
+    ├── chiSquaredJob.py        # MRJob: Chi-Squared feature selection job
+    ├── data                    # Input and intermediate data
+    │   ├── counters.txt        # Output counters from word count step
+    │   ├── reviews_devset.json # Sample Amazon review dataset for debug
+    │   └── stopwords.txt       # Stopwords list for filtering
+    ├── logs                    # YARN application logs fetched manually
+    │   └── <APPLICATION_ID>.log
+    ├── main.sh                 # Orchestration script for the full pipeline
+    ├── output                  # Local-mode outputs (created only when ENVIRONMENT=0)
+    │   └── amazon_reviews_chiotp
+    │       ├── wordcount       # Word count step output files
+    │       │   ├── part-00000
+    │       │   └── ...
+    │       └── chisq           # Chi-Squared step output files
+    │           └── part-00000
+    ├── report                  # Report
+    │   └── report.pdf
+    ├── results                 # Local copy of Chi-Squared results
+    │   └── 2025_04_29_19_27_chisq_output.txt
+    ├── utils                   # Shared utility modules and scripts
+    │   ├── logger.py           # Logging helper class
+    │   ├── utils.py            # Python helper functions
+    │   └── utils.sh            # Shell helper functions
+    ├── wordCountJob.py         # MRJob: word count per category
+    └── wordCountWrapper.py     # Wrapper to extract counters before Chi-Squared
 ```
 
-- **`src/main.sh`**: Single-entrypoint script to run both steps.
-- **`src/data/`**: Input JSON and stopwords.
+- **`src/main.sh`**: Orchestration script (single entrypoint to run both steps).
+- **`src/data/`**: Input and intermediate data:
+  - `reviews_devset.json`: sample review dataset for debug.
+  - `stopwords.txt`: list of stopwords for filtering.
+  - `counters.txt`: counters output from the word count step.
 - **`src/wordCountJob.py`** & **`src/chiSquaredJob.py`**: Core MRJob implementations.
-- **`src/wordCountWrapper.py`**: Handles counters extraction before piping to Chi-Squared job.
+- **`src/wordCountWrapper.py`**: Wrapper to extract counters before Chi-Squared job.
 - **`src/utils/`**: Shared helpers (shell & Python).
 
+- The `logs/` folder is created when you fetch YARN logs per instructions below.
+- The `output/` directory is only generated during a local run of the pipeline (`ENVIRONMENT=0`).
 ---
 
 ## Usage
@@ -141,15 +160,42 @@ Within `main.sh`, the following MRJob flags are passed:
 
 ## Outputs
 
+- **`$ROOT_DIR/data/counters.txt`**  
+  - Contains two values: <total_reviews> <JSON-dict of category counts> produced by the Word Count step.
 - **`$ROOT_DIR/output/amazon_reviews_chiotp/wordcount/`**  
   - `part-00000`, `part-00001`, … : Word count results.  
-  - `counters.txt` : Two values: `<total_reviews> <JSON-dict of category counts>`
 
 - **`$ROOT_DIR/output/amazon_reviews_chiotp/chisq/`**  
   - `part-00000` : Chi-Squared top words per category & combined word list.
 
 - **`$ROOT_DIR/results/`**  
   - Timestamped `chisq_output.txt` local copy of cluster result.
+
+---
+
+## Retrieving YARN Application Logs
+
+1. **Find your Application ID**  
+   Run:
+
+   ```bash
+   yarn application -list
+   ```
+
+   This will list all running (or recently finished) YARN applications.  
+   Locate the line where the **USER** column matches your username, and copy the **Application ID** (e.g. `application_1612345678901_0001`).
+
+2. **Fetch and save your logs**  
+   Create a `logs/` folder and download the consolidated logs into it:
+
+   ```bash
+   mkdir -p ./logs
+   yarn logs -applicationId <APPLICATION_ID> > ./logs/<APPLICATION_ID>.log
+   ```
+
+   Replace `<APPLICATION_ID>` with the ID you found in step 1.
+
+That’s it! You’ll now have a file at `./logs/<APPLICATION_ID>.log` containing all of your application’s logs.
 
 ---
 
